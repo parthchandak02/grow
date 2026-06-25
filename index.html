@@ -356,10 +356,19 @@ class Tree {
       for (let i = 0; i < this.leaves.length; i++) {
         const l = this.leaves[i];
         let visible = true;
+        let leafScale = 1;
+
+        // Wither: leaves shrink and fade, they don't pop out
         if (p > C.autumnEnd) {
           const witherP = (p-C.autumnEnd)/(C.witherEnd-C.autumnEnd);
-          if (witherP > l.fallT) visible = false;
+          if (witherP > l.fallT) {
+            const fallDuration = 1 - l.fallT;
+            const fallP = Math.min((witherP - l.fallT) / fallDuration, 1);
+            leafScale = 1 - fallP * 0.92;
+            if (leafScale <= 0.08) visible = false;
+          }
         }
+
         if (p < C.growEnd) {
           if (leafAppear < (i/this.leaves.length)*1.0) visible = false;
         }
@@ -367,6 +376,7 @@ class Tree {
 
         ctx.save();
         ctx.translate(l.x, l.y);
+        ctx.scale(leafScale, leafScale);
         ctx.rotate(l.r);
         if (p > C.growEnd && p < C.autumnEnd) {
           ctx.rotate(Math.sin(fc*C.swaySpeed*P.sway*1.5+this.phase+i)*C.swayAmp*P.sway*0.6);
