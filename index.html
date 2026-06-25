@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Grow — a generative garden</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #f5f0ea;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      user-select: none;
+    }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+/* ponytail: zero dependencies. pure Canvas 2D API. works offline.
+   no servers, no CDN, no build step. open file → works. */
+
+// ────────────────────────────────────────────── CONFIG
+const C = {
+  maxPlants: 30,
+  growFrames: 600,     // ~10s at 60fps
+  fadeFrames: 90,      // 1.5s to fade out when replaced
+  swayAmp: 0.025,      // radians
+  swaySpeed: 0.0018,
+  maxDepth: 5,
+  trunkMin: 55,
+  trunkMax: 95,
+};
+
+// ────────────────────────────────────────────── PALETTE
+const BG = '#f5f0ea';
+const INK = '#2b2520';
+const LEAF_C = ['#7a9b7a','#8aaa7a','#6b8b6b','#c46a4d','#d47a5d','#b45a3d'];
+const TXT = 'tap to plant a seed';
+
+// ────────────────────────────────────────────── CANVAS SETUP
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ────────────────────────────────────────────── STATE
+let plants = [];
+let fc = 0; // frame count
+let touchGuard = false;
+
+// ────────────────────────────────────────────── PLANT
+class Plant {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.age = 0;
+    this.fading = false;
+    this.alpha = 255;
+    this.removed = false;
+    this.phase = Math.random() * Math.PI * 2;
+    this.trunkLen = C.trunkMin + Math.random() * (C.trunkMax - C.trunkMin);
+    this.depth = 3 + Math.floor(Math.random() * (C.maxDepth - 2));
+    this.segments = [];
+    this.leaves = [];
+    this._grow(0, 0, -Math.PI / 2, this.trunkLen, 0);
+  }
+
+  _grow(rx, ry, angle, len, depth) {
+    const ex = rx + Math.cos(angle) * len;
+    const ey = ry + Math.sin(angle) * len;
+    if (this.y + ey > H * 0.92) return;
+
+    this.segments.push({ x1: rx, y1: ry, x2: ex, y2: ey, depth });
+
+    if (depth >= 2 && len < 18 && Math.random() < 0.45) {
+      this.leaves.push({
+        x: ex + (Math.random() - 0.5) * 6,
+        y: ey + (Math.random() - 0.5) * 6,
+        s: 6 + Math.random() * 8,
+        r: (Math.random() - 0.5) * Math.PI * 0.7,
+        c: LEAF_C[Math.floor(Math.random() * LEAF_C.length)]
+      });
+    }
+
+    if (depth < this.depth && len > 4) {
+      const n = Math.random() < 0.2 ? 1 : 2;
+      for (let i = 0; i < n; i++) {
+        this._grow(ex, ey,
+          angle + (Math.random() - 0.5) * 1.1,
+          len * (0.55 + Math.random() * 0.2),
+          depth + 1);
+      }
+    }
+  }
+
+  get progress() { return Math.min(this.age / C.growFrames, 1); }
+
+  update() {
+    if (this.age < C.growFrames) this.age++;
+    if (this.fading) {
+      this.alpha -= 255 / C.fadeFrames;
+      if (this.alpha <= 0) this.removed = true;
+    }
+  }
+
+  draw() {
+    const p = this.progress;
+    ctx.save();
+    ctx.translate(this.x, this.y);
+
+    // Seed-to-full scale in first 10% of growth
+    if (p < 0.1) {
+      const s = 0.1 + p * 9;
+      ctx.scale(s, s);
+    }
+
+    // Gentle sway after full growth
+    if (p >= 1) {
+      ctx.rotate(Math.sin(fc * C.swaySpeed + this.phase) * C.swayAmp);
+    }
+
+    // Fade alpha
+    if (this.alpha < 255 || this.fading) {
+      ctx.globalAlpha = this.alpha / 255;
+    }
+
+    // --- Branches ---
+    const segCount = Math.floor(this.segments.length * p);
+    for (let i = 0; i < segCount; i++) {
+      const s = this.segments[i];
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 3.5 - (s.depth / this.depth) * 2.9;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(s.x1, s.y1);
+      ctx.lineTo(s.x2, s.y2);
+      ctx.stroke();
+    }
+
+    // --- Leaves (after 40% growth) ---
+    const leafP = Math.max(0, (p - 0.4) / 0.6);
+    const leafCount = Math.floor(this.leaves.length * leafP);
+    for (let i = 0; i < leafCount; i++) {
+      const l = this.leaves[i];
+      ctx.save();
+      ctx.translate(l.x, l.y);
+      ctx.rotate(l.r);
+      if (p >= 1) {
+        ctx.rotate(
+          Math.sin(fc * C.swaySpeed * 2 + this.phase + i) * C.swayAmp * 0.8
+        );
+      }
+      ctx.fillStyle = l.c;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, l.s / 2, l.s * 0.275, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.restore(); // undo fade alpha too, since save/restore covers it
+  }
+}
+
+// ────────────────────────────────────────────── DRAW LOOP
+function draw() {
+  fc++;
+
+  // Background
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, H);
+
+  // Update & draw plants (newest on top)
+  for (let i = plants.length - 1; i >= 0; i--) {
+    plants[i].update();
+    plants[i].draw();
+  }
+
+  // Remove fully faded plants
+  for (let i = plants.length - 1; i >= 0; i--) {
+    if (plants[i].removed) plants.splice(i, 1);
+  }
+
+  // Instruction text (hide after 5 plants)
+  if (plants.length < 5) {
+    ctx.fillStyle = INK;
+    ctx.font = '13px serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(TXT, 16, H - 16);
+  }
+
+  requestAnimationFrame(draw);
+}
+
+// ────────────────────────────────────────────── PLANTING
+function plantAt(x, y) {
+  if (plants.length >= C.maxPlants) plants[0].fading = true;
+  plants.push(new Plant(x, y));
+}
+
+canvas.addEventListener('click', (e) => {
+  if (touchGuard) { touchGuard = false; return; }
+  plantAt(e.clientX, e.clientY);
+});
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  touchGuard = true;
+  setTimeout(() => { touchGuard = false; }, 200);
+  const t = e.touches[0];
+  if (t) plantAt(t.clientX, t.clientY);
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
+
+// ────────────────────────────────────────────── START
+// One seed at lower-center so the page isn't empty
+plants.push(new Plant(W / 2, H * 0.68));
+draw();
+</script>
+</body>
+</html>
