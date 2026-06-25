@@ -15,41 +15,162 @@
       user-select: none;
     }
     canvas { display: block; }
+
+    /* ── Controls panel (bottom-right, collapsible) ── */
+    #controls {
+      position: fixed;
+      bottom: 16px; right: 16px;
+      z-index: 10;
+      display: flex; flex-direction: column; align-items: flex-end;
+      gap: 8px;
+      font-family: serif;
+      color: #2b2520;
+    }
+    #ctrlToggle {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: 1px solid #2b2520;
+      background: #f5f0ea;
+      color: #2b2520;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s;
+    }
+    #ctrlToggle:hover { background: #e8e0d0; }
+    #ctrlToggle.active { background: #2b2520; color: #f5f0ea; }
+
+    #ctrlPanel {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      background: #f5f0ea;
+      border: 1px solid #2b2520;
+      border-radius: 12px;
+      padding: 14px 16px;
+      min-width: 200px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    #ctrlPanel.open { display: flex; }
+
+    .ctrl-row {
+      display: flex; align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .ctrl-row label {
+      width: 55px;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .ctrl-row input[type="range"] {
+      flex: 1;
+      height: 2px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: #c9b99a;
+      border-radius: 1px;
+      outline: none;
+      cursor: pointer;
+    }
+    .ctrl-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #2b2520;
+      border: none;
+      cursor: pointer;
+    }
+    .ctrl-row input[type="range"]::-moz-range-thumb {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #2b2520;
+      border: none;
+      cursor: pointer;
+    }
+    .ctrl-val {
+      width: 32px;
+      text-align: right;
+      font-size: 11px;
+      color: #6b5a4a;
+    }
+    .ctrl-note {
+      font-size: 10px;
+      color: #a09080;
+      text-align: center;
+      padding-top: 4px;
+      border-top: 1px solid #e0d8c8;
+    }
   </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+
+<div id="controls">
+  <div id="ctrlPanel">
+    <div class="ctrl-row">
+      <label>Speed</label>
+      <input type="range" id="sSpeed" min="0.3" max="3" step="0.1" value="1">
+      <span class="ctrl-val" id="vSpeed">1x</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Lifespan</label>
+      <input type="range" id="sLife" min="5" max="25" step="1" value="12">
+      <span class="ctrl-val" id="vLife">12s</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Size</label>
+      <input type="range" id="sSize" min="0.4" max="2" step="0.1" value="1">
+      <span class="ctrl-val" id="vSize">100%</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Density</label>
+      <input type="range" id="sDense" min="0.3" max="2.5" step="0.1" value="1">
+      <span class="ctrl-val" id="vDense">1x</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Sway</label>
+      <input type="range" id="sSway" min="0" max="4" step="0.1" value="1">
+      <span class="ctrl-val" id="vSway">1x</span>
+    </div>
+    <div class="ctrl-note">affects new trees</div>
+  </div>
+  <button id="ctrlToggle">⚙</button>
+</div>
+
 <script>
 /* ponytail: zero dependencies. pure Canvas 2D API. works offline. */
 
-// ────────────────────────────────────────────── CONFIG
+// ────────────────────────────────────────────── CONFIG (runtime overrides)
 const C = {
   maxTrees: 30,
   growEnd: 0.35,
   matureEnd: 0.55,
   autumnEnd: 0.75,
   witherEnd: 0.90,
-  totalLife: 720,       // ~12s at 60fps
+  baseLife: 720,        // base frames at 1x speed
   swayAmp: 0.025,
   swaySpeed: 0.0018,
   maxDepth: 7,
   trunkMin: 50,
   trunkMax: 85,
+  densityMul: 1,        // branch count multiplier
+};
+
+// ────────────────────────────────────────────── RUNTIME PARAMS (from sliders)
+const P = {
+  speed: 1,
+  lifespan: 12,  // seconds
+  size: 1,
+  density: 1,
+  sway: 1,
 };
 
 // ────────────────────────────────────────────── PALETTES
 const BG = '#f5f0ea';
 const BRANCH_C = '#2b2520';
 const LEAF_GREEN  = ['#5a8a5a','#6b9a6b','#4a7a4a','#7aaa6a','#3d6b3d'];
-const LEAF_AUTUMN = [
-  '#d4a030', // golden yellow
-  '#c49030',
-  '#c46a4d', // orange
-  '#d47a5d',
-  '#b45a3d',
-  '#a06030',
-  '#8b5a3d', // brown
-];
+const LEAF_AUTUMN = ['#d4a030','#c49030','#c46a4d','#d47a5d','#b45a3d','#a06030','#8b5a3d'];
 const TXT = 'tap to plant a tree';
 
 // ────────────────────────────────────────────── CANVAS
@@ -77,58 +198,97 @@ let trees = [];
 let fc = 0;
 let touchGuard = false;
 
+// ────────────────────────────────────────────── CONTROLS
+const ctrlToggle = document.getElementById('ctrlToggle');
+const ctrlPanel  = document.getElementById('ctrlPanel');
+ctrlToggle.addEventListener('click', () => {
+  const open = ctrlPanel.classList.toggle('open');
+  ctrlToggle.classList.toggle('active', open);
+});
+
+function setupSlider(id, valId, onChange) {
+  const slider = document.getElementById(id);
+  const display = document.getElementById(valId);
+  slider.addEventListener('input', () => {
+    onChange(parseFloat(slider.value));
+  });
+  return slider;
+}
+
+setupSlider('sSpeed', 'vSpeed', (v) => {
+  P.speed = v;
+  document.getElementById('vSpeed').textContent = v + 'x';
+});
+setupSlider('sLife', 'vLife', (v) => {
+  P.lifespan = v;
+  document.getElementById('vLife').textContent = v + 's';
+});
+setupSlider('sSize', 'vSize', (v) => {
+  P.size = v;
+  document.getElementById('vSize').textContent = Math.round(v*100) + '%';
+});
+setupSlider('sDense', 'vDense', (v) => {
+  P.density = v;
+  C.densityMul = v;
+  document.getElementById('vDense').textContent = v + 'x';
+});
+setupSlider('sSway', 'vSway', (v) => {
+  P.sway = v;
+  document.getElementById('vSway').textContent = v + 'x';
+});
+
 // ────────────────────────────────────────────── TREE
 class Tree {
   constructor(x, y) {
     this.x = x; this.y = y;
     this.age = 0;
     this.phase = Math.random() * Math.PI * 2;
-    this.trunkLen = C.trunkMin + Math.random() * (C.trunkMax - C.trunkMin);
-    this.maxD = 5 + Math.floor(Math.random() * 2);
+    this.trunkLen = (C.trunkMin + Math.random()*(C.trunkMax-C.trunkMin)) * C.densityMul;
+    // Density also affects depth range: denser = deeper
+    this.maxD = Math.min(7, Math.max(4, 5 + Math.floor((C.densityMul - 0.5) * 2)));
     this.segments = [];
     this.leaves = [];
-    this._grow(0, 0, -Math.PI / 2, this.trunkLen, 0, true);
+    this._grow(0, 0, -Math.PI/2, this.trunkLen, 0, true);
   }
 
   _grow(x, y, angle, len, depth, isTrunk) {
     if (this.segments.length > 650) return;
-    const ex = x + Math.cos(angle) * len;
-    const ey = y + Math.sin(angle) * len;
-    if (this.y + ey > H * 0.92) return;
+    const ex = x + Math.cos(angle)*len;
+    const ey = y + Math.sin(angle)*len;
+    if (this.y + ey > H*0.92) return;
 
     this.segments.push({ x1:x, y1:y, x2:ex, y2:ey, depth, isTrunk:isTrunk?1:0 });
 
-    // Leaves at fine twigs (depth 3+, short branches)
     if (depth >= 3 && len < 14 && Math.random() < 0.6) {
       this.leaves.push({
-        x: ex + (Math.random()-0.5)*5,
-        y: ey + (Math.random()-0.5)*5,
-        s: 8 + Math.random()*10,
-        r: (Math.random()-0.5)*Math.PI*0.7,
+        x: ex+(Math.random()-0.5)*5, y: ey+(Math.random()-0.5)*5,
+        s: 8+Math.random()*10, r: (Math.random()-0.5)*Math.PI*0.7,
         idx: Math.floor(Math.random()*LEAF_GREEN.length),
-        fallT: 0.2 + Math.random()*0.8  // when during wither this leaf falls (0-1)
+        fallT: 0.2+Math.random()*0.8
       });
     }
 
     if (depth >= this.maxD || len < 3) return;
 
+    // Use density multiplier for branch counts
+    const dMul = C.densityMul;
+
     if (isTrunk && depth < 2) {
-      const ta = angle + (Math.random()-0.5)*0.06;
-      const tl = len * (0.68 + Math.random()*0.1);
-      this._grow(ex, ey, ta, tl, depth+1, true);
+      const tl = len * (0.68+Math.random()*0.1);
+      this._grow(ex, ey, angle+(Math.random()-0.5)*0.06, tl, depth+1, true);
     } else if (isTrunk && depth >= 2) {
-      const n = 3 + Math.floor(Math.random()*3.5);
+      // Upper trunk: 3-6 limbs times density
+      const n = Math.round((3 + Math.random()*3) * dMul);
       for (let i = 0; i < n; i++) {
         const dir = Math.random()<0.5?1:-1;
         const limbAngle = angle + dir*(0.4+Math.random()*1.0) + (Math.random()-0.5)*0.3;
-        const limbLen = len * (0.35+Math.random()*0.25);
+        const limbLen = len * (0.35+Math.random()*0.25) * Math.min(dMul, 1.3);
         this._grow(ex, ey, limbAngle, limbLen, depth+1, false);
       }
-      const ta = angle + (Math.random()-0.5)*0.08;
       const tl = len * (0.55+Math.random()*0.1);
-      this._grow(ex, ey, ta, tl, depth+1, true);
+      this._grow(ex, ey, angle+(Math.random()-0.5)*0.08, tl, depth+1, true);
     } else {
-      const n = 2 + Math.floor(Math.random()*2.5);
+      const n = Math.round((2 + Math.random()*2) * dMul);
       for (let i = 0; i < n; i++) {
         this._grow(ex, ey,
           angle + (Math.random()-0.5)*0.9,
@@ -138,39 +298,38 @@ class Tree {
     }
   }
 
-  get p() { return Math.min(this.age / C.totalLife, 1); }
+  get p() { return Math.min(this.age / C.baseLife, 1); }
 
-  update() { if (this.age < C.totalLife) this.age++; }
+  update() {
+    if (this.age < C.baseLife) this.age += P.speed;
+  }
 
   draw() {
     const p = this.p;
     ctx.save();
     ctx.translate(this.x, this.y);
+    ctx.scale(P.size, P.size);
 
     // Seed burst
-    if (p < 0.08) { const s = 0.1 + p*11.25; ctx.scale(s,s); }
+    if (p < 0.08) { const s = 0.1+p*11.25; ctx.scale(s,s); }
 
-    // Sway during growth→mature
+    // Sway
     if (p < C.witherEnd) {
       const swayStr = p < C.growEnd ? p/C.growEnd : 1;
-      ctx.rotate(Math.sin(fc*C.swaySpeed+this.phase)*C.swayAmp*swayStr);
+      ctx.rotate(Math.sin(fc*C.swaySpeed*P.sway+this.phase)*C.swayAmp*P.sway*swayStr);
     }
 
-    // ── Determine how many segments are visible ──
+    // ── Segment visibility ──
     let segCount;
     if (p < C.growEnd) {
-      // Phase 1: growth — segments appear from base to tips
-      segCount = Math.floor(this.segments.length * (p / C.growEnd));
+      segCount = Math.floor(this.segments.length * (p/C.growEnd));
     } else if (p < C.witherEnd) {
-      // Phase 2-4: all segments visible (mature, autumn, wither)
       segCount = this.segments.length;
     } else {
-      // Phase 5: death — segments disappear from tips back to base
       const deathP = (p - C.witherEnd) / (1 - C.witherEnd);
-      segCount = Math.floor(this.segments.length * (1 - deathP));
+      segCount = Math.floor(this.segments.length * (1-deathP));
     }
 
-    // Branch color: darkens through wither
     let branchColor = BRANCH_C;
     if (p > C.autumnEnd) {
       const t = Math.min((p-C.autumnEnd)/(C.witherEnd-C.autumnEnd), 1);
@@ -180,8 +339,8 @@ class Tree {
     for (let i = 0; i < segCount; i++) {
       const s = this.segments[i];
       const w = s.isTrunk
-        ? Math.max(1.2, 5.5 - (s.depth/this.maxD)*4.0)
-        : Math.max(0.3, 2.8 - (s.depth/this.maxD)*2.5);
+        ? Math.max(1.2, 5.5-(s.depth/this.maxD)*4.0)
+        : Math.max(0.3, 2.8-(s.depth/this.maxD)*2.5);
       ctx.strokeStyle = branchColor;
       ctx.lineWidth = w;
       ctx.lineCap = 'round';
@@ -193,61 +352,41 @@ class Tree {
 
     // ── Leaves ──
     if (p < C.witherEnd) {
-      const leafAppear = Math.min(Math.max((p-0.12)/(C.growEnd-0.12), 0), 1);
-
-      // Determine which leaves are still on the tree
+      const leafAppear = Math.min(Math.max((p-0.12)/(C.growEnd-0.12),0),1);
       for (let i = 0; i < this.leaves.length; i++) {
         const l = this.leaves[i];
-
-        // During wither: leaves fall when progress exceeds their fallT
         let visible = true;
         if (p > C.autumnEnd) {
-          const witherP = (p - C.autumnEnd) / (C.witherEnd - C.autumnEnd);
+          const witherP = (p-C.autumnEnd)/(C.witherEnd-C.autumnEnd);
           if (witherP > l.fallT) visible = false;
         }
-
-        // During growth: leaf appears based on leafAppear
         if (p < C.growEnd) {
-          // Leaves appear in bursts — first leaves at top appear later
-          const leafOrder = i / this.leaves.length; // 0 at bottom, 1 at top
-          if (leafAppear < leafOrder * 1.0) visible = false;
+          if (leafAppear < (i/this.leaves.length)*1.0) visible = false;
         }
-
         if (!visible) continue;
 
         ctx.save();
         ctx.translate(l.x, l.y);
         ctx.rotate(l.r);
         if (p > C.growEnd && p < C.autumnEnd) {
-          ctx.rotate(Math.sin(fc*C.swaySpeed*1.5+this.phase+i)*C.swayAmp*0.6);
+          ctx.rotate(Math.sin(fc*C.swaySpeed*P.sway*1.5+this.phase+i)*C.swayAmp*P.sway*0.6);
         }
 
-        // ── Leaf color through seasons ──
         let leafColor;
         if (p < C.matureEnd) {
-          // Green phase
-          leafColor = lerpArray(LEAF_GREEN, (l.idx + i*0.1) % 1);
+          leafColor = lerpArray(LEAF_GREEN, (l.idx+i*0.1)%1);
         } else if (p < C.autumnEnd) {
-          // Autumn: green → golden yellow → orange → brown
-          const autumnP = (p - C.matureEnd) / (C.autumnEnd - C.matureEnd);
+          const autumnP = (p-C.matureEnd)/(C.autumnEnd-C.matureEnd);
           if (autumnP < 0.33) {
-            // Green → golden yellow
-            const t = autumnP / 0.33;
-            const green = lerpArray(LEAF_GREEN, (l.idx + i*0.1) % 1);
-            leafColor = lerpColor(green, '#d4a030', t);
+            leafColor = lerpColor(lerpArray(LEAF_GREEN,(l.idx+i*0.1)%1), '#d4a030', autumnP/0.33);
           } else if (autumnP < 0.66) {
-            // Golden yellow → orange
-            const t = (autumnP - 0.33) / 0.33;
-            leafColor = lerpColor('#d4a030', '#c46a4d', t);
+            leafColor = lerpColor('#d4a030', '#c46a4d', (autumnP-0.33)/0.33);
           } else {
-            // Orange → brown
-            const t = (autumnP - 0.66) / 0.34;
-            leafColor = lerpColor('#c46a4d', '#8b5a3d', t);
+            leafColor = lerpColor('#c46a4d', '#8b5a3d', (autumnP-0.66)/0.34);
           }
         } else {
-          // Wither phase: brown leaves darken slightly
-          const witherP = (p - C.autumnEnd) / (C.witherEnd - C.autumnEnd);
-          leafColor = lerpColor('#8b5a3d', '#5a3a2d', Math.min(witherP*1.5, 1));
+          const t = Math.min((p-C.autumnEnd)/(C.witherEnd-C.autumnEnd)*1.5, 1);
+          leafColor = lerpColor('#8b5a3d', '#5a3a2d', t);
         }
 
         ctx.fillStyle = leafColor;
@@ -258,9 +397,9 @@ class Tree {
       }
     }
 
-    // ── Death: empty skeleton droops and fades ──
+    // ── Death ──
     if (p > C.witherEnd) {
-      const deathP = (p - C.witherEnd) / (1 - C.witherEnd);
+      const deathP = (p-C.witherEnd)/(1-C.witherEnd);
       if (deathP > 0.3) {
         ctx.translate(0, deathP*15);
         ctx.scale(1-(deathP-0.3)*0.3, 1-(deathP-0.3)*0.3);
@@ -275,6 +414,8 @@ class Tree {
 // ────────────────────────────────────────────── LOOP
 function draw() {
   fc++;
+  // Recompute baseLife from lifespan slider
+  C.baseLife = Math.round(P.lifespan * 60);
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, W, H);
 
@@ -297,6 +438,8 @@ function plantAt(x, y) { if (trees.length < C.maxTrees) trees.push(new Tree(x, y
 
 canvas.addEventListener('click', (e) => {
   if (touchGuard) { touchGuard = false; return; }
+  // Don't plant if click is on controls panel
+  if (e.target.closest('#controls')) return;
   plantAt(e.clientX, e.clientY);
 });
 canvas.addEventListener('touchstart', (e) => {
