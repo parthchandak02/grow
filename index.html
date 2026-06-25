@@ -58,8 +58,16 @@
     .mode-btn:not(.active):hover { background: #d8d0c0; }
 
     #dataBadge {
-      font-size: 10px; color: #a09080; text-align: center;
-      padding: 4px 8px; background: #f0ebe0; border-radius: 6px;
+      font-size: 10px; color: #6b5a4a; text-align: center;
+      padding: 6px 8px; background: #f0ebe0; border-radius: 6px;
+      line-height: 1.4;
+    }
+    #dataBadge .val { font-weight: bold; color: #2b2520; }
+    #dataBadge .src { font-size: 9px; color: #a09080; display: block; margin-top: 2px; }
+
+    .info-line {
+      font-size: 9px; color: #8b7a6a; text-align: center;
+      padding: 6px 4px 0; line-height: 1.4; font-style: italic;
     }
   </style>
 </head>
@@ -99,6 +107,7 @@
       <span class="ctrl-val" id="vSway">1x</span>
     </div>
     <div class="ctrl-note">affects new trees</div>
+    <div class="info-line">Auto: real deforestation data from 2025 drives lifecycle. Manual: sliders give you full control.</div>
   </div>
   <button id="ctrlToggle">⚙</button>
 </div>
@@ -145,18 +154,24 @@ function lerpArray(arr,t){
 async function loadDeforestData() {
   const badge=document.getElementById('dataBadge');
   try {
-    // Try to fetch from GitHub raw first (our hosted copy)
     let resp=await fetch('https://raw.githubusercontent.com/parthchandak02/grow/main/deforestation_data.csv');
     if(!resp.ok) throw new Error('GitHub raw failed');
     let text=await resp.text();
     parseDeforestCSV(text);
-    badge.textContent='Deforestation data: 2025 loaded';
+    const worldLoss = deforestData?.['World']?.['2025'];
+    if (worldLoss !== undefined) {
+      const lossM = (Math.abs(worldLoss) / 1e6).toFixed(1);
+      const dir = worldLoss > 0 ? 'lost' : 'gained';
+      badge.innerHTML = `<span class="val">${lossM}M hectares ${dir}</span> globally in 2025 <span class="src">Source: FAO via Our World in Data</span>`;
+    } else {
+      badge.innerHTML = `<span class="val">Deforestation data loaded</span> <span class="src">FAO 2025 via Our World in Data</span>`;
+    }
+    updateDeforFactor();
   } catch(e) {
-    badge.textContent='Could not load data. Using simulated values.';
-    // Fallback: use hardcoded approximate values for major countries
+    badge.innerHTML = `Could not load data. Using simulated values. <span class="src">Open in browser with internet for live data</span>`;
     deforestData={ 'World': { '2025': 5004931 }, 'Brazil': { '2025': 3256050 }, 'Indonesia': { '2025': -81479 }, 'China': { '2025': -1611000 }, 'US': { '2025': 72000 }, 'Canada': { '2025': 9818 } };
+    updateDeforFactor();
   }
-  updateDeforFactor();
 }
 
 function parseDeforestCSV(text) {
