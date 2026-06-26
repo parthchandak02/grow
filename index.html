@@ -207,8 +207,8 @@ function draw(){
     const curYear=worldData[timelineIdx];
     timelineTicks++;
 
-    // Advance year every ~240 frames (4s)
-    if(timelineTicks>240){
+    // Advance year every ~60 frames (1 second)
+    if(timelineTicks>60){
       timelineTicks=0;
       totalForestChange+=curYear.value;
       timelineIdx=(timelineIdx+1)%worldData.length;
@@ -230,7 +230,7 @@ function draw(){
     const dir=nextYear.value>0?'lost':'gained';
     const cumulativeDir=totalForestChange>0?'lost total':'gained total';
     const treesThisYear=Math.max(2,Math.min(12,Math.round(Math.abs(nextYear.value)/HECTARES_PER_TREE)));
-    badge.innerHTML=`<span class="val">${nextYear.year}: ${fmtHectares(Math.abs(nextYear.value))} ha ${dir}</span> <span class="sub">${treesThisYear} trees this year · ${fmtHectares(Math.abs(totalForestChange))} ha ${cumulativeDir} since 1991</span><span class="src">Timeline advancing every 4s · Trees accumulate</span>`;
+    badge.innerHTML=`<span class="val">${nextYear.year}: ${fmtHectares(Math.abs(nextYear.value))} ha ${dir}</span> <span class="sub">${treesThisYear} trees this year · ${fmtHectares(Math.abs(totalForestChange))} ha ${cumulativeDir} since 1991</span><span class="src">Timeline: 1s = 1 year · Loops through 1991-2025 · Trees accumulate</span>`;
 
     // Draw timeline bar at top
     const barMax=6000000,maxBars=30;
