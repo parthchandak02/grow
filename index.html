@@ -66,6 +66,7 @@ function lerpC(a,b,t){
 function fmtN(n){const a=Math.abs(n);if(a>=1e9)return(a/1e9).toFixed(1)+'B';if(a>=1e6)return(a/1e6).toFixed(1)+'M';if(a>=1e3)return(a/1e3).toFixed(0)+'K';return a.toFixed(0);}
 
 // ── DATA ──
+let isSampleData=false;
 async function loadData(){
   try{
     let r=await fetch('https://raw.githubusercontent.com/parthchandak02/grow/main/deforestation_data.csv');
@@ -81,6 +82,7 @@ async function loadData(){
     }
     worldData.sort((a,b)=>a.year-b.year);
   }catch(e){
+    isSampleData=true;
     for(let y=1991;y<=2025;y++)worldData.push({year:y,value:-2000000+Math.random()*5000000});
   }
 }
@@ -207,7 +209,7 @@ function draw(){
       // Spawn trees for year
       const absV=Math.abs(prev.value);
       const n=Math.max(2,Math.min(10,Math.round(absV/HECTARES_PER_TREE)));
-      const isLoss=prev.value>0;
+      const isLoss=prev.value<0; // net change: negative = forest lost
       for(let i=0;i<n;i++){
         const x=20+Math.random()*(W-40);
         const y=drawY+20+Math.random()*(graphY-drawY-40);
@@ -232,7 +234,8 @@ function draw(){
     ctx.fillText(cur.year,W/2,TBAR_H/2-2);
     // Small data label (minimal, right aligned)
     ctx.fillStyle='rgba(43,37,32,0.35)';ctx.font='9px serif';ctx.textAlign='right';ctx.textBaseline='bottom';
-    const dir=cur.value>0?'lost':'gained';ctx.fillText(`${fmtN(Math.abs(cur.value))}ha ${dir}`,W-14,TBAR_H-8);
+    const dir=cur.value<0?'lost':'gained';ctx.fillText(`${fmtN(Math.abs(cur.value))}ha ${dir}`,W-14,TBAR_H-20);
+    if(isSampleData){ctx.fillStyle='rgba(140,60,40,0.7)';ctx.textAlign='left';ctx.fillText('random sample data: FAO CSV failed to load',14,TBAR_H-20);}
     // Start/end year labels
     ctx.fillStyle='rgba(43,37,32,0.2)';ctx.font='8px serif';ctx.textAlign='left';ctx.textBaseline='bottom';
     ctx.fillText(worldData[0].year,14,TBAR_H-8);
@@ -265,7 +268,7 @@ function draw(){
 
       // Current cumulative value (tiny)
       ctx.fillStyle='rgba(43,37,32,0.3)';ctx.font='8px serif';ctx.textAlign='center';ctx.textBaseline='bottom';
-      ctx.fillText(`cumulative: ${lastC>=0?'+':''}${fmtN(Math.round(lastC))}ha`,W/2,H-4);
+      ctx.fillText(`cumulative: ${lastC>=0?'+':'-'}${fmtN(Math.round(lastC))}ha`,W/2,H-4);
     }
   }
 

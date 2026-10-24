@@ -23,7 +23,7 @@
 
 <br><br>
 
-<a href="https://parthchandak02.github.io/grow/"><img src="docs/assets/readme/timeline.jpg" width="100%" alt="Timeline mode at 2016: a cream page scattered with about two hundred small green trees, a year bar along the top and a cumulative line along the bottom"></a>
+<a href="https://parthchandak02.github.io/grow/"><img src="docs/assets/readme/timeline.jpg" width="100%" alt="Timeline mode at 2016: a cream page scattered with about two hundred small bare brown trunks, one per chunk of forest lost, a year bar along the top and a cumulative line along the bottom"></a>
 
 <sub>Timeline mode, live capture after 26 seconds. Real FAO data.</sub>
 
@@ -48,13 +48,12 @@ A line along the bottom tracks the running total. Then it loops.
 
 The CSV is Our World in Data's export of *Annual change in forest area* from the FAO Global
 Forest Resources Assessment 2025. The page fetches it from this repo's `main` branch on
-GitHub; if that fails it falls back to random values. The FAO series is a five- or ten-year
+GitHub; if that fails it falls back to random values and says so in the top-left corner. The FAO series is a five- or ten-year
 average, so consecutive years often repeat the same number.
 
-> **Known issue.** The code treats a positive value as a loss, but in this dataset a negative
-> value is a loss. Every world value from 1991 to 2025 is negative (net loss, from about 3.2 to
-> 10.7 million ha a year), so the trees are drawn green and the top-right label says "gained"
-> when the data says forest was lost. The bottom line's colour does follow the correct sign.
+In this dataset a negative value is a net loss. Every world value from 1991 to 2025 is negative
+(about 3.2 to 10.7 million ha a year), so the timeline plants bare brown trunks and the top-right
+label reads "lost".
 
 ## Plant your own
 
@@ -88,9 +87,6 @@ One HTML file with no build step and no libraries. Opening `index.html` directly
 index.html                     The whole piece: canvas, controls, both modes
 deforestation_data.csv         FAO annual change in forest area by country, 1991-2025 (used)
 deforestation_metadata.json    Source and citation for that CSV
-annual_change_forest_area.csv  Same series as deforestation_data.csv (not loaded by the page)
-annual_deforestation.csv       Gross deforestation by region, 1990-2020 (not loaded)    
-tree_cover_loss.csv            Tree cover loss by country, 2001 onward (not loaded)
 ```
 
 </details>
